@@ -110,6 +110,46 @@ func (c *Client) URLValues(param Param) (value url.Values, err error) {
 	return p, nil
 }
 
+func (c *Client) FormatResponse(code, message, method string, data interface{}) (res *Response, err error) {
+	var p = url.Values{}
+	p.Add("method", method)
+	p.Add("nonce", nonce())
+	p.Add("timestamp", strconv.FormatInt(time.Now().In(c.location).Unix(), 10))
+	p.Add("code", code)
+	p.Add("message", message)
+
+	var enData string
+	if data != nil {
+		bytes, err := json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+
+		enData, err = encryptWithPKCS1v15(bytes, c.todayPublicKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	p.Add("data", enData)
+
+	sign, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
+	if err != nil {
+		return nil, err
+	}
+
+	res = &Response{
+		Code:      Code(code),
+		Message:   p.Get("message"),
+		Method:    p.Get("method"),
+		Nonce:     p.Get("nonce"),
+		Timestamp: p.Get("timestamp"),
+		Data:      p.Get("data"),
+		Sign:      sign,
+	}
+
+	return
+}
+
 func (c *Client) doRequest(method string, param Param, result interface{}) (err error) {
 	var buf io.Reader
 	if param != nil {
@@ -154,6 +194,14 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 		}
 	}
 
+	if res.Data == "" {
+		return
+	}
+
+	if result == nil {
+		return
+	}
+
 	content, err := decryptWithPKCS1v15(res.Data, c.appPrivateKey)
 	if err != nil {
 		return
@@ -189,19 +237,7 @@ func decryptWithPKCS1v15(s string, privateKey *rsa.PrivateKey) (b []byte, err er
 }
 
 func signWithPKCS1v15(param url.Values, privateKey *rsa.PrivateKey, hash crypto.Hash) (s string, err error) {
-	if param == nil {
-		param = make(url.Values, 0)
-	}
-
-	var pList = make([]string, 0, 0)
-	for key := range param {
-		var value = strings.TrimSpace(param.Get(key))
-		if len(value) > 0 {
-			pList = append(pList, key+"="+value)
-		}
-	}
-	sort.Strings(pList)
-	var src = strings.Join(pList, "&")
+	var src = toBeSignedString(param)
 	sig, err := crypto4go.RSASignWithKey([]byte(src), privateKey, hash)
 	if err != nil {
 		return "", err
@@ -210,13 +246,33 @@ func signWithPKCS1v15(param url.Values, privateKey *rsa.PrivateKey, hash crypto.
 	return s, nil
 }
 
+func toBeSignedString(param url.Values) string {
+	if param == nil {
+		param = make(url.Values, 0)
+	}
+
+	var pList = make([]string, 0, 0)
+	for key := range param {
+		if key == kSignNodeName {
+			continue
+		}
+		var value = strings.TrimSpace(param.Get(key))
+		if len(value) > 0 {
+			pList = append(pList, key+"="+value)
+		}
+	}
+	sort.Strings(pList)
+	return strings.Join(pList, "&")
+}
+
 func (c *Client) VerifyResponseSign(res *Response) (ok bool, err error) {
 	var data = url.Values{}
 	data.Add("code", string(res.Code))
+	data.Add("message", res.Message)
+	data.Add("method", res.Method)
 	data.Add("nonce", res.Nonce)
 	data.Add("timestamp", res.Timestamp)
 	data.Add("sign", res.Sign)
-	data.Add("message", res.Message)
 	data.Add("data", res.Data)
 
 	return c.VerifySign(data)
@@ -229,29 +285,7 @@ func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
 func verifySign(data url.Values, key *rsa.PublicKey) (ok bool, err error) {
 	sign := data.Get(kSignNodeName)
 
-	var keys = make([]string, 0, 0)
-	for k := range data {
-		if k == kSignNodeName {
-			continue
-		}
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-	var buf strings.Builder
-
-	for _, k := range keys {
-		vs := data[k]
-		for _, v := range vs {
-			if buf.Len() > 0 {
-				buf.WriteByte('&')
-			}
-			buf.WriteString(k)
-			buf.WriteByte('=')
-			buf.WriteString(v)
-		}
-	}
-	s := buf.String()
+	s := toBeSignedString(data)
 	return verifyData([]byte(s), sign, key)
 }
 

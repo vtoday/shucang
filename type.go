@@ -12,6 +12,17 @@ const (
 	kSignNodeName  = "sign"
 )
 
+const (
+	MUserInfo                     = "user.info"
+	MCollectionInfo               = "collection.info"
+	MCollectionExchange           = "collection.exchange"
+	MCollectionExchangeInfo       = "collection.exchange.info"
+	MCollectionPublishNotify      = "collection.publish.notify"
+	MCollectionTradeSuccessNotify = "collection.trade.success.notify"
+	MCollectionExtract            = "collection.extract"
+	MCenterCollectionCheck        = "center.collection.check"
+)
+
 type Code string
 
 func (c Code) IsSuccess() bool {
@@ -30,6 +41,7 @@ type Param interface {
 type Response struct {
 	Code      Code   `json:"code"`
 	Message   string `json:"message"`
+	Method    string `json:"method"`
 	Nonce     string `json:"nonce"`
 	Timestamp string `json:"timestamp"`
 	Sign      string `json:"sign"`
