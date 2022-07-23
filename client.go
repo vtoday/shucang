@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -150,6 +151,29 @@ func (c *Client) FormatResponse(code, message, method string, data interface{}) 
 	return
 }
 
+func (c *Client) ParseRequestParam(req *http.Request, p Param) (err error) {
+	request, err := parseRequest(req)
+	if err != nil {
+		return
+	}
+
+	if ok, err := c.VerifyRequestSign(request); !ok {
+		return err
+	}
+
+	content, err := decryptWithPKCS1v15(request.Data, c.appPrivateKey)
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(content, p)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 func (c *Client) doRequest(method string, param Param, result interface{}) (err error) {
 	var buf io.Reader
 	if param != nil {
@@ -157,7 +181,13 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 		if err != nil {
 			return err
 		}
-		buf = strings.NewReader(p.Encode())
+
+		s, err := URLValuesToJsonString(p)
+		if err != nil {
+			return err
+		}
+
+		buf = strings.NewReader(s)
 	}
 
 	req, err := http.NewRequest(method, c.apiDomain, buf)
@@ -209,14 +239,50 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 
 	err = json.Unmarshal(content, result)
 	if err != nil {
-		return err
+		return
 	}
 
-	return err
+	return
 }
 
 func (c *Client) DoRequest(method string, param Param, result interface{}) (err error) {
 	return c.doRequest(method, param, result)
+}
+
+func (c *Client) VerifyResponseSign(res *Response) (ok bool, err error) {
+	var data = url.Values{}
+	data.Add("code", string(res.Code))
+	data.Add("message", res.Message)
+	data.Add("method", res.Method)
+	data.Add("nonce", res.Nonce)
+	data.Add("timestamp", res.Timestamp)
+	data.Add("sign", res.Sign)
+	data.Add("data", res.Data)
+
+	return c.VerifySign(data)
+}
+
+func (c *Client) VerifyRequestSign(req *Request) (ok bool, err error) {
+	var data = url.Values{}
+	data.Add("app_id", req.AppId)
+	data.Add("method", req.Method)
+	data.Add("nonce", req.Nonce)
+	data.Add("timestamp", req.Timestamp)
+	data.Add("sign", req.Sign)
+	data.Add("data", req.Data)
+
+	return c.VerifySign(data)
+}
+
+func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
+	return verifySign(data, c.todayPublicKey)
+}
+
+func verifySign(data url.Values, key *rsa.PublicKey) (ok bool, err error) {
+	sign := data.Get(kSignNodeName)
+
+	s := toBeSignedString(data)
+	return verifyData([]byte(s), sign, key)
 }
 
 func encryptWithPKCS1v15(msg []byte, publicKey *rsa.PublicKey) (s string, err error) {
@@ -265,28 +331,24 @@ func toBeSignedString(param url.Values) string {
 	return strings.Join(pList, "&")
 }
 
-func (c *Client) VerifyResponseSign(res *Response) (ok bool, err error) {
-	var data = url.Values{}
-	data.Add("code", string(res.Code))
-	data.Add("message", res.Message)
-	data.Add("method", res.Method)
-	data.Add("nonce", res.Nonce)
-	data.Add("timestamp", res.Timestamp)
-	data.Add("sign", res.Sign)
-	data.Add("data", res.Data)
+func URLValuesToJsonString(param url.Values) (s string, err error) {
+	if param == nil {
+		param = make(url.Values, 0)
+	}
 
-	return c.VerifySign(data)
-}
+	m := make(map[string]string)
+	for key := range param {
+		var value = strings.TrimSpace(param.Get(key))
+		m[key] = value
+	}
 
-func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
-	return verifySign(data, c.todayPublicKey)
-}
+	js, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	s = string(js)
 
-func verifySign(data url.Values, key *rsa.PublicKey) (ok bool, err error) {
-	sign := data.Get(kSignNodeName)
-
-	s := toBeSignedString(data)
-	return verifyData([]byte(s), sign, key)
+	return
 }
 
 func verifyData(data []byte, sign string, key *rsa.PublicKey) (ok bool, err error) {
@@ -305,4 +367,44 @@ func nonce() string {
 	id := uuid.New().String()
 	r := sha1.Sum([]byte(id))
 	return hex.EncodeToString(r[:])
+}
+
+func parseRequest(req *http.Request) (r *Request, err error) {
+	if req.ContentLength == 0 {
+		return
+	}
+
+	ctype := req.Header.Get(HeaderContentType)
+	switch {
+	case strings.HasPrefix(ctype, MIMEApplicationJSON):
+		err = json.NewDecoder(req.Body).Decode(r)
+		if ute, ok := err.(*json.UnmarshalTypeError); ok {
+			err = fmt.Errorf("unmarshal type error: expected=%v, got=%v, field=%v, offset=%v", ute.Type, ute.Value, ute.Field, ute.Offset)
+		} else if se, ok := err.(*json.SyntaxError); ok {
+			err = fmt.Errorf("syntax error: offset=%v, error=%v", se.Offset, se.Error())
+			return
+		}
+
+	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
+		if strings.HasPrefix(ctype, MIMEApplicationForm) {
+			err = req.ParseForm()
+		} else if strings.HasPrefix(ctype, MIMEMultipartForm) {
+			err = req.ParseMultipartForm(defaultMemory)
+		}
+		if err != nil {
+			return
+		}
+
+		r.AppId = req.FormValue("app_id")
+		r.Method = req.FormValue("method")
+		r.Nonce = req.FormValue("nonce")
+		r.Timestamp = req.FormValue("timestamp")
+		r.Sign = req.FormValue("sign")
+		r.Data = req.FormValue("data")
+
+	default:
+		err = fmt.Errorf("content-type: %s is unsupported", ctype)
+		return
+	}
+	return
 }
