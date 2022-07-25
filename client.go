@@ -152,26 +152,12 @@ func (c *Client) FormatResponse(code, message, method string, data interface{}) 
 }
 
 func (c *Client) ParseRequestParam(req *http.Request, p Param) (err error) {
-	request, err := parseRequest(req)
+	request, err := ParseRequest(req)
 	if err != nil {
 		return
 	}
 
-	if ok, err := c.VerifyRequestSign(request); !ok {
-		return err
-	}
-
-	content, err := decryptWithPKCS1v15(request.Data, c.appPrivateKey)
-	if err != nil {
-		return
-	}
-
-	err = json.Unmarshal(content, p)
-	if err != nil {
-		return
-	}
-
-	return
+	return c.VerifyRequestParam(request, p)
 }
 
 func (c *Client) doRequest(method string, param Param, result interface{}) (err error) {
@@ -278,6 +264,64 @@ func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
 	return verifySign(data, c.todayPublicKey)
 }
 
+func (c *Client) VerifyRequestParam(request *Request, p Param) (err error) {
+	if ok, err := c.VerifyRequestSign(request); !ok {
+		return err
+	}
+
+	content, err := decryptWithPKCS1v15(request.Data, c.appPrivateKey)
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(content, p)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func ParseRequest(req *http.Request) (r *Request, err error) {
+	if req.ContentLength == 0 {
+		return
+	}
+
+	ctype := req.Header.Get(HeaderContentType)
+	switch {
+	case strings.HasPrefix(ctype, MIMEApplicationJSON):
+		err = json.NewDecoder(req.Body).Decode(r)
+		if ute, ok := err.(*json.UnmarshalTypeError); ok {
+			err = fmt.Errorf("unmarshal type error: expected=%v, got=%v, field=%v, offset=%v", ute.Type, ute.Value, ute.Field, ute.Offset)
+		} else if se, ok := err.(*json.SyntaxError); ok {
+			err = fmt.Errorf("syntax error: offset=%v, error=%v", se.Offset, se.Error())
+			return
+		}
+
+	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
+		if strings.HasPrefix(ctype, MIMEApplicationForm) {
+			err = req.ParseForm()
+		} else if strings.HasPrefix(ctype, MIMEMultipartForm) {
+			err = req.ParseMultipartForm(defaultMemory)
+		}
+		if err != nil {
+			return
+		}
+
+		r.AppId = req.FormValue("app_id")
+		r.Method = req.FormValue("method")
+		r.Nonce = req.FormValue("nonce")
+		r.Timestamp = req.FormValue("timestamp")
+		r.Sign = req.FormValue("sign")
+		r.Data = req.FormValue("data")
+
+	default:
+		err = fmt.Errorf("content-type: %s is unsupported", ctype)
+		return
+	}
+	return
+}
+
 func verifySign(data url.Values, key *rsa.PublicKey) (ok bool, err error) {
 	sign := data.Get(kSignNodeName)
 
@@ -367,44 +411,4 @@ func nonce() string {
 	id := uuid.New().String()
 	r := sha1.Sum([]byte(id))
 	return hex.EncodeToString(r[:])
-}
-
-func parseRequest(req *http.Request) (r *Request, err error) {
-	if req.ContentLength == 0 {
-		return
-	}
-
-	ctype := req.Header.Get(HeaderContentType)
-	switch {
-	case strings.HasPrefix(ctype, MIMEApplicationJSON):
-		err = json.NewDecoder(req.Body).Decode(r)
-		if ute, ok := err.(*json.UnmarshalTypeError); ok {
-			err = fmt.Errorf("unmarshal type error: expected=%v, got=%v, field=%v, offset=%v", ute.Type, ute.Value, ute.Field, ute.Offset)
-		} else if se, ok := err.(*json.SyntaxError); ok {
-			err = fmt.Errorf("syntax error: offset=%v, error=%v", se.Offset, se.Error())
-			return
-		}
-
-	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
-		if strings.HasPrefix(ctype, MIMEApplicationForm) {
-			err = req.ParseForm()
-		} else if strings.HasPrefix(ctype, MIMEMultipartForm) {
-			err = req.ParseMultipartForm(defaultMemory)
-		}
-		if err != nil {
-			return
-		}
-
-		r.AppId = req.FormValue("app_id")
-		r.Method = req.FormValue("method")
-		r.Nonce = req.FormValue("nonce")
-		r.Timestamp = req.FormValue("timestamp")
-		r.Sign = req.FormValue("sign")
-		r.Data = req.FormValue("data")
-
-	default:
-		err = fmt.Errorf("content-type: %s is unsupported", ctype)
-		return
-	}
-	return
 }
