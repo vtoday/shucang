@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"github.com/smartwalle/crypto4go"
 )
 
@@ -27,6 +28,7 @@ type Client struct {
 	apiDomain string
 	client    *http.Client
 	location  *time.Location
+	logger    *logrus.Entry
 
 	appPrivateKey  *rsa.PrivateKey
 	todayPublicKey *rsa.PublicKey
@@ -52,6 +54,12 @@ func WithApiDomain(apiDomain string) OptionFunc {
 	}
 }
 
+func WithLogger(entry *logrus.Entry) OptionFunc {
+	return func(c *Client) {
+		c.logger = entry
+	}
+}
+
 func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (client *Client, err error) {
 	priKey, err := crypto4go.ParsePKCS8PrivateKey(crypto4go.FormatPKCS8PrivateKey(privateKey))
 	if err != nil {
@@ -66,6 +74,7 @@ func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (
 	client = &Client{}
 	client.isProd = isProd
 	client.appId = appId
+	client.logger = logrus.NewEntry(logrus.StandardLogger())
 
 	if client.isProd {
 		client.apiDomain = kProductionURL
@@ -81,6 +90,8 @@ func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (
 	for _, opt := range opts {
 		opt(client)
 	}
+
+	client.logger.Infof("Client init, app_id: %s private: %s, public: %s api_domain: %s", appId, privateKey, publicKey, client.apiDomain)
 
 	return client, nil
 }
@@ -103,8 +114,9 @@ func (c *Client) URLValues(param Param) (value url.Values, err error) {
 	}
 	p.Add("data", enData)
 
-	sign, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
+	sign, src, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
 	if err != nil {
+		c.logger.Infof("URLValues sign string: %s", src)
 		return nil, NewError(CUnknown, "数据签名失败").SetErr(err)
 	}
 	p.Add("sign", sign)
@@ -133,8 +145,9 @@ func (c *Client) FormatResponse(code, message, method string, data interface{}) 
 	}
 	p.Add("data", enData)
 
-	sign, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
+	sign, src, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
 	if err != nil {
+		c.logger.Infof("FormatResponse sign string: %s", src)
 		return nil, NewError(CUnknown, "数据签名失败").SetErr(err)
 	}
 
@@ -157,23 +170,45 @@ func (c *Client) ParseRequestParam(req *http.Request, p Param) (err error) {
 		return NewError(CDataDecodeFailure).SetErr(err)
 	}
 
+	if err = c.CheckRequestParams(request); err != nil {
+		return
+	}
+
 	return c.VerifyRequestParam(request, p)
+}
+
+func (c *Client) CheckRequestParams(request *Request) error {
+	if request == nil {
+		return NewError(CParamInvalid)
+	}
+	if request.AppId == "" {
+		return NewError(CNotAppIdParam)
+	}
+	if request.Nonce == "" {
+		return NewError(CNotNonceParam)
+	}
+	if request.Data == "" {
+		return NewError(CNotDataParam)
+	}
+
+	return nil
 }
 
 func (c *Client) doRequest(method string, param Param, result interface{}) (err error) {
 	var buf io.Reader
+	var reqBody string
 	if param != nil {
 		p, err := c.URLValues(param)
 		if err != nil {
 			return NewError(CUnknown).SetErr(err)
 		}
 
-		s, err := URLValuesToJsonString(p)
+		reqBody, err = URLValuesToJsonString(p)
 		if err != nil {
 			return NewError(CUnknown).SetErr(err)
 		}
 
-		buf = strings.NewReader(s)
+		buf = strings.NewReader(reqBody)
 	}
 
 	req, err := http.NewRequest(method, c.apiDomain, buf)
@@ -194,6 +229,8 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 	if err != nil {
 		return NewError(CUnknown).SetErr(err)
 	}
+
+	c.logger.Infof("Shucang api request, url: %s, request: %s, response: %s", c.apiDomain, reqBody, string(data))
 
 	var res *Response
 	if err = json.Unmarshal(data, &res); err != nil {
@@ -261,7 +298,11 @@ func (c *Client) VerifyRequestSign(req *Request) (ok bool, err error) {
 }
 
 func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
-	return verifySign(data, c.todayPublicKey)
+	ok, src, err := verifySign(data, c.todayPublicKey)
+	if err != nil {
+		c.logger.Infof("VerifySign sign string: %s", src)
+	}
+	return
 }
 
 func (c *Client) VerifyRequestParam(request *Request, p Param) (err error) {
@@ -323,11 +364,13 @@ func ParseRequest(req *http.Request) (r *Request, err error) {
 	return
 }
 
-func verifySign(data url.Values, key *rsa.PublicKey) (ok bool, err error) {
+func verifySign(data url.Values, key *rsa.PublicKey) (ok bool, src string, err error) {
 	sign := data.Get(kSignNodeName)
 
-	s := toBeSignedString(data)
-	return verifyData([]byte(s), sign, key)
+	src = toBeSignedString(data)
+	ok, err = verifyData([]byte(src), sign, key)
+
+	return
 }
 
 func encryptWithPKCS1v15(msg []byte, publicKey *rsa.PublicKey) (s string, err error) {
@@ -347,14 +390,14 @@ func decryptWithPKCS1v15(s string, privateKey *rsa.PrivateKey) (b []byte, err er
 	return crypto4go.RSADecryptWithKey(msg, privateKey)
 }
 
-func signWithPKCS1v15(param url.Values, privateKey *rsa.PrivateKey, hash crypto.Hash) (s string, err error) {
-	var src = toBeSignedString(param)
+func signWithPKCS1v15(param url.Values, privateKey *rsa.PrivateKey, hash crypto.Hash) (s string, src string, err error) {
+	src = toBeSignedString(param)
 	sig, err := crypto4go.RSASignWithKey([]byte(src), privateKey, hash)
 	if err != nil {
-		return "", err
+		return
 	}
 	s = base64.StdEncoding.EncodeToString(sig)
-	return s, nil
+	return
 }
 
 func toBeSignedString(param url.Values) string {

@@ -29,7 +29,6 @@ const (
 )
 
 var codeMessages = map[Code]string{
-	CSuccess:            "成功",
 	CDataDecryptFailure: "数据解密失败",
 	CSignFailure:        "签名校验失败",
 	CParamInvalid:       "参数无效",
