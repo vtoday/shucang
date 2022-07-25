@@ -1,9 +1,5 @@
 package shucang
 
-import (
-	"fmt"
-)
-
 const (
 	kSandboxURL       = "https://dev-openapi.360ex.art/api/v1/open"
 	kProductionURL    = "https://openapi.360ex.art/api/v1/open"
@@ -29,16 +25,6 @@ const (
 	MCenterCollectionCheck        = "center.collection.check"
 )
 
-type Code string
-
-func (c Code) IsSuccess() bool {
-	return c == CodeSuccess
-}
-
-const (
-	CodeSuccess Code = "200" // 接口调用成功
-)
-
 type Param interface {
 	// APIName 用于提供访问的 method
 	APIName() string
@@ -61,8 +47,4 @@ type Response struct {
 	Timestamp string `json:"timestamp"`
 	Sign      string `json:"sign"`
 	Data      string `json:"data"`
-}
-
-func (r *Response) Error() string {
-	return fmt.Sprintf("Response err, code: %s, message: %s", r.Code, r.Message)
 }

@@ -55,12 +55,12 @@ func WithApiDomain(apiDomain string) OptionFunc {
 func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (client *Client, err error) {
 	priKey, err := crypto4go.ParsePKCS8PrivateKey(crypto4go.FormatPKCS8PrivateKey(privateKey))
 	if err != nil {
-		return nil, err
+		return nil, NewError(CCertError, "私钥配置错误").SetErr(err)
 	}
 
 	pubKey, err := crypto4go.ParsePublicKey(crypto4go.FormatPublicKey(publicKey))
 	if err != nil {
-		return nil, err
+		return nil, NewError(CCertError, "公钥配置错误").SetErr(err)
 	}
 
 	client = &Client{}
@@ -89,23 +89,23 @@ func (c *Client) URLValues(param Param) (value url.Values, err error) {
 	var p = url.Values{}
 	p.Add("app_id", c.appId)
 	p.Add("method", param.APIName())
-	p.Add("nonce", nonce())
+	p.Add("nonce", Nonce())
 	p.Add("timestamp", strconv.FormatInt(time.Now().In(c.location).Unix(), 10))
 
 	bytes, err := json.Marshal(param)
 	if err != nil {
-		return nil, err
+		return nil, NewError(CUnknown, "Data to json 失败").SetErr(err)
 	}
 
 	enData, err := encryptWithPKCS1v15(bytes, c.todayPublicKey)
 	if err != nil {
-		return
+		return nil, NewError(CUnknown, "数据加密失败").SetErr(err)
 	}
 	p.Add("data", enData)
 
 	sign, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
 	if err != nil {
-		return nil, err
+		return nil, NewError(CUnknown, "数据签名失败").SetErr(err)
 	}
 	p.Add("sign", sign)
 	return p, nil
@@ -114,7 +114,7 @@ func (c *Client) URLValues(param Param) (value url.Values, err error) {
 func (c *Client) FormatResponse(code, message, method string, data interface{}) (res *Response, err error) {
 	var p = url.Values{}
 	p.Add("method", method)
-	p.Add("nonce", nonce())
+	p.Add("nonce", Nonce())
 	p.Add("timestamp", strconv.FormatInt(time.Now().In(c.location).Unix(), 10))
 	p.Add("code", code)
 	p.Add("message", message)
@@ -123,19 +123,19 @@ func (c *Client) FormatResponse(code, message, method string, data interface{}) 
 	if data != nil {
 		bytes, err := json.Marshal(data)
 		if err != nil {
-			return nil, err
+			return nil, NewError(CUnknown).SetErr(err)
 		}
 
 		enData, err = encryptWithPKCS1v15(bytes, c.todayPublicKey)
 		if err != nil {
-			return nil, err
+			return nil, NewError(CUnknown, "数据加密失败").SetErr(err)
 		}
 	}
 	p.Add("data", enData)
 
 	sign, err := signWithPKCS1v15(p, c.appPrivateKey, crypto.SHA256)
 	if err != nil {
-		return nil, err
+		return nil, NewError(CUnknown, "数据签名失败").SetErr(err)
 	}
 
 	res = &Response{
@@ -154,7 +154,7 @@ func (c *Client) FormatResponse(code, message, method string, data interface{}) 
 func (c *Client) ParseRequestParam(req *http.Request, p Param) (err error) {
 	request, err := ParseRequest(req)
 	if err != nil {
-		return
+		return NewError(CDataDecodeFailure).SetErr(err)
 	}
 
 	return c.VerifyRequestParam(request, p)
@@ -165,12 +165,12 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 	if param != nil {
 		p, err := c.URLValues(param)
 		if err != nil {
-			return err
+			return NewError(CUnknown).SetErr(err)
 		}
 
 		s, err := URLValuesToJsonString(p)
 		if err != nil {
-			return err
+			return NewError(CUnknown).SetErr(err)
 		}
 
 		buf = strings.NewReader(s)
@@ -178,7 +178,7 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 
 	req, err := http.NewRequest(method, c.apiDomain, buf)
 	if err != nil {
-		return err
+		return NewError(CUnknown).SetErr(err)
 	}
 	req.Header.Set("Content-Type", kContentType)
 
@@ -187,26 +187,26 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 		defer resp.Body.Close()
 	}
 	if err != nil {
-		return err
+		return NewError(CApiRequestFailure).SetErr(err)
 	}
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return NewError(CUnknown).SetErr(err)
 	}
 
 	var res *Response
 	if err = json.Unmarshal(data, &res); err != nil {
-		return err
+		return NewError(CDataDecodeFailure).SetErr(err)
 	}
 
-	if res.Code != CodeSuccess {
-		return res
+	if res.Code != CSuccess {
+		return NewError(res.Code, res.Message)
 	}
 
 	if res.Sign != "" {
 		if ok, err := c.VerifyResponseSign(res); !ok {
-			return err
+			return NewError(CSignFailure).SetErr(err)
 		}
 	}
 
@@ -220,12 +220,12 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 
 	content, err := decryptWithPKCS1v15(res.Data, c.appPrivateKey)
 	if err != nil {
-		return
+		return NewError(CDataDecryptFailure).SetErr(err)
 	}
 
 	err = json.Unmarshal(content, result)
 	if err != nil {
-		return
+		return NewError(CDataDecodeFailure).SetErr(err)
 	}
 
 	return
@@ -266,17 +266,17 @@ func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
 
 func (c *Client) VerifyRequestParam(request *Request, p Param) (err error) {
 	if ok, err := c.VerifyRequestSign(request); !ok {
-		return err
+		return NewError(CSignFailure).SetErr(err)
 	}
 
 	content, err := decryptWithPKCS1v15(request.Data, c.appPrivateKey)
 	if err != nil {
-		return
+		return NewError(CDataDecryptFailure).SetErr(err)
 	}
 
 	err = json.Unmarshal(content, p)
 	if err != nil {
-		return
+		return NewError(CUnknown).SetErr(err)
 	}
 
 	return
@@ -290,9 +290,10 @@ func ParseRequest(req *http.Request) (r *Request, err error) {
 	ctype := req.Header.Get(HeaderContentType)
 	switch {
 	case strings.HasPrefix(ctype, MIMEApplicationJSON):
-		err = json.NewDecoder(req.Body).Decode(r)
+		err = json.NewDecoder(req.Body).Decode(&r)
 		if ute, ok := err.(*json.UnmarshalTypeError); ok {
 			err = fmt.Errorf("unmarshal type error: expected=%v, got=%v, field=%v, offset=%v", ute.Type, ute.Value, ute.Field, ute.Offset)
+			return
 		} else if se, ok := err.(*json.SyntaxError); ok {
 			err = fmt.Errorf("syntax error: offset=%v, error=%v", se.Offset, se.Error())
 			return
@@ -407,7 +408,7 @@ func verifyData(data []byte, sign string, key *rsa.PublicKey) (ok bool, err erro
 	return true, nil
 }
 
-func nonce() string {
+func Nonce() string {
 	id := uuid.New().String()
 	r := sha1.Sum([]byte(id))
 	return hex.EncodeToString(r[:])
