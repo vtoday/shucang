@@ -60,7 +60,7 @@ func WithLogger(entry *logrus.Entry) OptionFunc {
 	}
 }
 
-func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (client *Client, err error) {
+func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (client *Client, e *BizErr) {
 	priKey, err := crypto4go.ParsePKCS8PrivateKey(crypto4go.FormatPKCS8PrivateKey(privateKey))
 	if err != nil {
 		return nil, NewError(CCertError, "私钥配置错误").SetErr(err)
@@ -96,7 +96,7 @@ func New(appId, privateKey, publicKey string, isProd bool, opts ...OptionFunc) (
 	return client, nil
 }
 
-func (c *Client) URLValues(param Param) (value url.Values, err error) {
+func (c *Client) URLValues(param Param) (value url.Values, e *BizErr) {
 	var p = url.Values{}
 	p.Add("app_id", c.appId)
 	p.Add("method", param.APIName())
@@ -123,7 +123,7 @@ func (c *Client) URLValues(param Param) (value url.Values, err error) {
 	return p, nil
 }
 
-func (c *Client) FormatResponse(code, message, method string, data interface{}) (res *Response, err error) {
+func (c *Client) FormatResponse(code, message, method string, data interface{}) (res *Response, e *BizErr) {
 	var p = url.Values{}
 	p.Add("method", method)
 	p.Add("nonce", Nonce())
@@ -164,7 +164,7 @@ func (c *Client) FormatResponse(code, message, method string, data interface{}) 
 	return
 }
 
-func (c *Client) ParseRequestParam(req *http.Request, p Param) (err error) {
+func (c *Client) ParseRequestParam(req *http.Request, p Param) (e *BizErr) {
 	request, err := ParseRequest(req)
 	if err != nil {
 		return NewError(CDataDecodeFailure).SetErr(err)
@@ -177,7 +177,7 @@ func (c *Client) ParseRequestParam(req *http.Request, p Param) (err error) {
 	return c.VerifyRequestParam(request, p)
 }
 
-func (c *Client) CheckRequestParams(request *Request) error {
+func (c *Client) CheckRequestParams(request *Request) *BizErr {
 	if request == nil {
 		return NewError(CParamInvalid)
 	}
@@ -194,13 +194,14 @@ func (c *Client) CheckRequestParams(request *Request) error {
 	return nil
 }
 
-func (c *Client) doRequest(method string, param Param, result interface{}) (err error) {
+func (c *Client) doRequest(method string, param Param, result interface{}) (e *BizErr) {
 	var buf io.Reader
 	var reqBody string
+	var err error
 	if param != nil {
-		p, err := c.URLValues(param)
-		if err != nil {
-			return NewError(CUnknown).SetErr(err)
+		p, e := c.URLValues(param)
+		if e != nil {
+			return e
 		}
 
 		reqBody, err = URLValuesToJsonString(p)
@@ -242,8 +243,8 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 	}
 
 	if res.Sign != "" {
-		if ok, err := c.VerifyResponseSign(res); !ok {
-			return NewError(CSignFailure).SetErr(err)
+		if ok, e := c.VerifyResponseSign(res); !ok {
+			return e
 		}
 	}
 
@@ -268,11 +269,11 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (err 
 	return
 }
 
-func (c *Client) DoRequest(method string, param Param, result interface{}) (err error) {
+func (c *Client) DoRequest(method string, param Param, result interface{}) *BizErr {
 	return c.doRequest(method, param, result)
 }
 
-func (c *Client) VerifyResponseSign(res *Response) (ok bool, err error) {
+func (c *Client) VerifyResponseSign(res *Response) (bool, *BizErr) {
 	var data = url.Values{}
 	data.Add("code", string(res.Code))
 	data.Add("message", res.Message)
@@ -285,7 +286,7 @@ func (c *Client) VerifyResponseSign(res *Response) (ok bool, err error) {
 	return c.VerifySign(data)
 }
 
-func (c *Client) VerifyRequestSign(req *Request) (ok bool, err error) {
+func (c *Client) VerifyRequestSign(req *Request) (bool, *BizErr) {
 	var data = url.Values{}
 	data.Add("app_id", req.AppId)
 	data.Add("method", req.Method)
@@ -297,33 +298,34 @@ func (c *Client) VerifyRequestSign(req *Request) (ok bool, err error) {
 	return c.VerifySign(data)
 }
 
-func (c *Client) VerifySign(data url.Values) (ok bool, err error) {
+func (c *Client) VerifySign(data url.Values) (ok bool, e *BizErr) {
 	ok, src, err := verifySign(data, c.todayPublicKey)
 	if err != nil {
 		c.logger.Infof("VerifySign sign string: %s", src)
+		return ok, NewError(CSignFailure).SetErr(err)
 	}
 	return
 }
 
-func (c *Client) VerifyRequestParam(request *Request, p Param) (err error) {
+func (c *Client) VerifyRequestParam(request *Request, p Param) *BizErr {
 	if ok, err := c.VerifyRequestSign(request); !ok {
 		return NewError(CSignFailure).SetErr(err)
 	}
 
-	content, err := c.DecryptRequestData(request)
-	if err != nil {
-		return NewError(CDataDecryptFailure).SetErr(err)
+	content, e := c.DecryptRequestData(request)
+	if e != nil {
+		return e
 	}
 
-	err = json.Unmarshal([]byte(content), p)
+	err := json.Unmarshal([]byte(content), p)
 	if err != nil {
 		return NewError(CUnknown).SetErr(err)
 	}
 
-	return
+	return nil
 }
 
-func (c *Client) DecryptRequestData(request *Request) (ds string, err error) {
+func (c *Client) DecryptRequestData(request *Request) (ds string, e *BizErr) {
 	if request.Data == "" {
 		return
 	}
