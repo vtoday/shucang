@@ -20,7 +20,7 @@ func (r UserInfoResponse) APIName() string {
 }
 
 // UserInfo 查询用户信息
-func (c *Client) UserInfo(param UserInfoParam) (result *UserInfoResponse, err error) {
+func (c *Client) UserInfo(param UserInfoParam) (result *UserInfoResponse, err *BizErr) {
 	err = c.doRequest("POST", param, result)
 	return
 }

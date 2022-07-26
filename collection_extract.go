@@ -11,6 +11,6 @@ func (r CollectionExtractParams) APIName() string {
 }
 
 // CollectionExtract 提取藏品至指定账户
-func (c *Client) CollectionExtract(param CollectionExtractParams) error {
+func (c *Client) CollectionExtract(param CollectionExtractParams) *BizErr {
 	return c.doRequest("POST", param, nil)
 }

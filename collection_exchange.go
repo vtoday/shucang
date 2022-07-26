@@ -11,6 +11,6 @@ func (r CollectionExchangeParam) APIName() string {
 }
 
 // Exchange 流转藏品
-func (c *Client) Exchange(param CollectionExchangeParam) error {
+func (c *Client) Exchange(param CollectionExchangeParam) *BizErr {
 	return c.doRequest("POST", param, nil)
 }

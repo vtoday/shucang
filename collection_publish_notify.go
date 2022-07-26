@@ -11,6 +11,6 @@ func (r CollectionPublishNotifyParam) APIName() string {
 }
 
 // CollectionPublishNotify 流转藏品
-func (c *Client) CollectionPublishNotify(param CollectionPublishNotifyParam) error {
+func (c *Client) CollectionPublishNotify(param CollectionPublishNotifyParam) *BizErr {
 	return c.doRequest("POST", param, nil)
 }

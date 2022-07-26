@@ -11,6 +11,6 @@ func (r CollectionTradeSuccessParams) APIName() string {
 }
 
 // CollectionTradeSuccessNotify 藏品售买成功通知
-func (c *Client) CollectionTradeSuccessNotify(param CollectionTradeSuccessParams) error {
+func (c *Client) CollectionTradeSuccessNotify(param CollectionTradeSuccessParams) *BizErr {
 	return c.doRequest("POST", param, nil)
 }
