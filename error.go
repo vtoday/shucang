@@ -29,6 +29,7 @@ const (
 )
 
 var codeMessages = map[Code]string{
+	CSuccess:            "成功",
 	CDataDecryptFailure: "数据解密失败",
 	CSignFailure:        "签名校验失败",
 	CParamInvalid:       "参数无效",
@@ -57,7 +58,7 @@ func NewError(code Code, message ...string) *BizErr {
 		Code: code,
 	}
 
-	if len(message) > 0 {
+	if len(message) > 0 && message[0] != "" {
 		bizErr.Message = message[0]
 	} else if msg, ok := codeMessages[code]; ok {
 		bizErr.Message = msg

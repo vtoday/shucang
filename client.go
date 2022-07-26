@@ -310,15 +310,29 @@ func (c *Client) VerifyRequestParam(request *Request, p Param) (err error) {
 		return NewError(CSignFailure).SetErr(err)
 	}
 
-	content, err := decryptWithPKCS1v15(request.Data, c.appPrivateKey)
+	content, err := c.DecryptRequestData(request)
 	if err != nil {
 		return NewError(CDataDecryptFailure).SetErr(err)
 	}
 
-	err = json.Unmarshal(content, p)
+	err = json.Unmarshal([]byte(content), p)
 	if err != nil {
 		return NewError(CUnknown).SetErr(err)
 	}
+
+	return
+}
+
+func (c *Client) DecryptRequestData(request *Request) (ds string, err error) {
+	if request.Data == "" {
+		return
+	}
+	content, err := decryptWithPKCS1v15(request.Data, c.appPrivateKey)
+	if err != nil {
+		return "", NewError(CDataDecryptFailure).SetErr(err)
+	}
+
+	ds = string(content)
 
 	return
 }
