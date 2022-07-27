@@ -2,8 +2,8 @@ package shucang
 
 type CollectionPublishNotifyParam struct {
 	CollectionHash string `json:"collection_hash"`
-	Price          string `json:"price"`
-	PublishTime    string `json:"publish_time"`
+	Price          int64  `json:"price"`
+	PublishTime    int64  `json:"publish_time"`
 }
 
 func (r CollectionPublishNotifyParam) APIName() string {

@@ -9,7 +9,7 @@ func (r CenterCollectionCheckParam) APIName() string {
 }
 
 type CenterCollectionCheckResponse struct {
-	IsExist            string `json:"is_exist"`
+	IsExist            int64  `json:"is_exist"`
 	OwnerWalletAddress string `json:"owner_wallet_address"`
 }
 

@@ -2,8 +2,8 @@ package shucang
 
 type CollectionTradeSuccessParams struct {
 	CollectionHash string `json:"collection_hash"`
-	Price          string `json:"price"`
-	CompleteTime   string `json:"complete_time"`
+	Price          int64  `json:"price"`
+	CompleteTime   int64  `json:"complete_time"`
 }
 
 func (r CollectionTradeSuccessParams) APIName() string {
