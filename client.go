@@ -238,14 +238,20 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (e *B
 		return NewError(CDataDecodeFailure).SetErr(err)
 	}
 
-	if res.Code != CSuccess {
-		return NewError(res.Code, res.Message)
+	if res.Code == "" {
+		return NewError(CApiResponseFailure)
 	}
 
-	if res.Sign != "" {
-		if ok, e := c.VerifyResponseSign(res); !ok {
-			return e
-		}
+	if res.Code != CSuccess {
+		return NewError(CApiResBizError).SetErr(NewError(res.Code, res.Message))
+	}
+
+	if res.Sign == "" {
+		return NewError(CNotSignParam)
+	}
+
+	if ok, e := c.VerifyResponseSign(res); !ok {
+		return e
 	}
 
 	if res.Data == "" {
@@ -260,6 +266,8 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (e *B
 	if err != nil {
 		return NewError(CDataDecryptFailure).SetErr(err)
 	}
+
+	c.logger.Infof("Shucang api data decrypt content: %s", content)
 
 	err = json.Unmarshal(content, result)
 	if err != nil {
