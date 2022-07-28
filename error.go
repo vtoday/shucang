@@ -65,6 +65,8 @@ var codeMessages = map[Code]string{
 	CNotTimeExpired:     "请求已过期",
 	CMethodNotExist:     "method路由不存在",
 
+	CApiResBizError: "接口返回业务错误数据",
+
 	CTodayException:     "交易平台服务异常",
 	CPlatformException:  "一级平台服务异常",
 	CDataDecodeFailure:  "数据解析失败",
@@ -96,6 +98,10 @@ func NewError(code Code, message ...string) *BizErr {
 }
 
 func IsBizErr(err error) (*BizErr, bool) {
+	if err == nil {
+		return nil, false
+	}
+
 	e, ok := err.(*BizErr)
 	if ok {
 		return e, ok

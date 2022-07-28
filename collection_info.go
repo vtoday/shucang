@@ -32,6 +32,6 @@ func (r CollectionInfoResponse) APIName() string {
 
 // CollectionInfo 查询藏品信息
 func (c *Client) CollectionInfo(param CollectionInfoParam) (result *CollectionInfoResponse, err *BizErr) {
-	err = c.doRequest("POST", param, result)
+	err = c.doRequest("POST", param, &result)
 	return
 }

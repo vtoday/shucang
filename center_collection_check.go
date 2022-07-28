@@ -19,6 +19,6 @@ func (r CenterCollectionCheckResponse) APIName() string {
 
 // CenterCollectionCheck 查询用户信息
 func (c *Client) CenterCollectionCheck(param CenterCollectionCheckParam) (result *CenterCollectionCheckResponse, err *BizErr) {
-	err = c.doRequest("POST", param, result)
+	err = c.doRequest("POST", param, &result)
 	return
 }

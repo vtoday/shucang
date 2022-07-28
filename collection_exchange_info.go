@@ -34,6 +34,6 @@ func (r CollectionExchangeInfoResponse) APIName() string {
 
 // CollectionExchangeInfo 查询正在转入(寄售)藏品信息
 func (c *Client) CollectionExchangeInfo(param CollectionExchangeInfoParam) (result *CollectionExchangeInfoResponse, err *BizErr) {
-	err = c.doRequest("POST", param, result)
+	err = c.doRequest("POST", param, &result)
 	return
 }

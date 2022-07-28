@@ -267,7 +267,7 @@ func (c *Client) doRequest(method string, param Param, result interface{}) (e *B
 		return NewError(CDataDecryptFailure).SetErr(err)
 	}
 
-	c.logger.Infof("Shucang api data decrypt content: %s", content)
+	c.logger.Infof("Shucang api data decrypted content: %s", content)
 
 	err = json.Unmarshal(content, result)
 	if err != nil {
