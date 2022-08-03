@@ -60,7 +60,7 @@ go get github.com/vtoday/shucang
     //解密请求data
     data, e := client.DecryptRequestData(request)
 
-    var param shucang.CollectionExchangeParam
+    var param shucang.UserInfoParam
     if err := json.Unmarshal([]byte(data), &param); err != nil {
         return
     }
