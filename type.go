@@ -1,8 +1,8 @@
 package shucang
 
 const (
-	kSandboxURL       = "http://dev.shucang360.cn/api/v1/open"
-	kProductionURL    = "https://openapi.360ex.art/api/v1/open"
+	kSandboxURL       = "http://dev-openapi.365ex.art/api/v1/open"
+	kProductionURL    = "https://openapi.365ex.art/api/v1/open"
 	kContentType      = "application/json;charset=utf-8"
 	kTimeFormat       = "2006-01-02 15:04:05"
 	kSignNodeName     = "sign"
