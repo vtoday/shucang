@@ -16,7 +16,9 @@ const (
 
 const (
 	MUserInfo                     = "user.info"
+	MUserBindNotify               = "user.bind.notify"
 	MCollectionInfo               = "collection.info"
+	MCollectionInfoSync           = "collection.info.sync"
 	MCollectionExchange           = "collection.exchange"
 	MCollectionExchangeInfo       = "collection.exchange.info"
 	MCollectionPublishNotify      = "collection.publish.notify"
