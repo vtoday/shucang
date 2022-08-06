@@ -64,4 +64,14 @@ go get github.com/vtoday/shucang
     if err := json.Unmarshal([]byte(data), &param); err != nil {
         return
     }
+    
+    // do something ......
+	
+    data := shucang.UserInfoResponse{
+        UserId:        "xxxx",
+        WalletAddress: "xxxxx",
+        VerifySign:    "xxxxxxx",
+    }
+    response, e := client.FormatResponse(string(shucang.CSuccess), "成功", shucang.MCollectionExchange, data)
+
 ```
