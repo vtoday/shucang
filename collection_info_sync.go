@@ -9,10 +9,10 @@ type CollectionInfoSyncParam struct {
 	ProductDetail         string `json:"product_detail"`
 	ProductCirculationNum int64  `json:"product_circulation_num"`
 	ProductPublishedTime  int64  `json:"product_published_time"`
+	ProductPublishPrice   int64  `json:"product_publish_price"`
 	MakerId               string `json:"maker_id"`
 	MakerName             string `json:"maker_name"`
 	MakerPicture          string `json:"maker_picture"`
-	PublishPrice          int64  `json:"publish_price"`
 }
 
 func (r CollectionInfoSyncParam) APIName() string {

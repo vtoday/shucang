@@ -113,6 +113,16 @@ func (r *BizErr) Error() string {
 	return fmt.Sprintf("BizErr err, code: %s, message: %s, err: %+v", r.Code, r.Message, r.Err)
 }
 
+func (r *BizErr) GetMessage() string {
+	msg := r.Message
+	if r.Code == CApiResBizError && r.Err != nil {
+		if e, ok := r.Err.(*BizErr); ok {
+			msg = msg + ": " + e.GetMessage()
+		}
+	}
+	return msg
+}
+
 func (r *BizErr) SetErr(err error) *BizErr {
 	r.Err = err
 	return r
