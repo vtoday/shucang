@@ -2,6 +2,7 @@ package shucang
 
 type UserBindNotifyParam struct {
 	UserId                string `json:"user_id"`
+	UserPhone             string `json:"user_phone"`
 	PlatformUserId        string `json:"platform_user_id"`
 	PlatformWalletAddress string `json:"platform_wallet_address"`
 	Type                  int64  `json:"type"`
