@@ -47,6 +47,10 @@ const (
 	CApiResponseFailure Code = "5005" // 接口返回数据异常
 	CUnknown            Code = "5500" // 未知异常
 
+	//业务错误码
+
+	CUserNotFound     Code = "20101" //未找到用户
+	CUserRealNameDiff Code = "20102" //用户实名信息不一致
 )
 
 var codeMessages = map[Code]string{
@@ -73,6 +77,9 @@ var codeMessages = map[Code]string{
 	CApiRequestFailure:  "接口请求失败",
 	CApiResponseFailure: "接口返回数据异常",
 	CUnknown:            "未知异常",
+
+	CUserNotFound:     "平台未注册账号",
+	CUserRealNameDiff: "平台账号实名信息不一致",
 }
 
 type BizErr struct {

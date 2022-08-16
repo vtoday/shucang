@@ -374,6 +374,7 @@ func ParseRequest(req *http.Request) (r *Request, err error) {
 			return
 		}
 
+		r = new(Request)
 		r.AppId = req.FormValue("app_id")
 		r.Method = req.FormValue("method")
 		r.Nonce = req.FormValue("nonce")
