@@ -4,6 +4,8 @@ type CollectionTradeSuccessParams struct {
 	CollectionHash string `json:"collection_hash"`
 	Price          int64  `json:"price"`
 	CompleteTime   int64  `json:"complete_time"`
+	SaleId         int64  `json:"sale_id"`
+	OrderNo        string `json:"order_no"`
 }
 
 func (r CollectionTradeSuccessParams) APIName() string {

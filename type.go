@@ -15,16 +15,17 @@ const (
 )
 
 const (
-	MUserInfo                     = "user.info"
-	MUserBindNotify               = "user.bind.notify"
-	MCollectionInfo               = "collection.info"
-	MCollectionInfoSync           = "collection.info.sync"
-	MCollectionExchange           = "collection.exchange"
-	MCollectionExchangeInfo       = "collection.exchange.info"
-	MCollectionPublishNotify      = "collection.publish.notify"
-	MCollectionTradeSuccessNotify = "collection.trade.success.notify"
-	MCollectionExtract            = "collection.extract"
-	MCenterCollectionCheck        = "center.collection.check"
+	MUserInfo                      = "user.info"
+	MUserBindNotify                = "user.bind.notify"
+	MCollectionInfo                = "collection.info"
+	MCollectionInfoSync            = "collection.info.sync"
+	MCollectionExchange            = "collection.exchange"
+	MCollectionExchangeInfo        = "collection.exchange.info"
+	MCollectionPublishNotify       = "collection.publish.notify"
+	MCollectionPublishCancelNotify = "collection.publish.cancel.notify"
+	MCollectionTradeSuccessNotify  = "collection.trade.success.notify"
+	MCollectionExtract             = "collection.extract"
+	MCenterCollectionCheck         = "center.collection.check"
 )
 
 type Param interface {
